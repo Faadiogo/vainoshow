@@ -54,7 +54,13 @@ export default function EventCard({ event, className }: EventCardProps) {
         <div className="mt-2 space-y-1">
           <div className="flex items-center text-sm text-muted-foreground">
             <Calendar className="h-4 w-4 mr-2 flex-shrink-0" />
-            <span>{formatDate(event.date)}</span>
+            <span>
+              {event.start_date
+                ? (event.end_date && event.end_date !== event.start_date
+                    ? `${format(new Date(event.start_date), "dd/MM/yyyy", { locale: ptBR })} à ${format(new Date(event.end_date), "dd/MM/yyyy", { locale: ptBR })}`
+                    : format(new Date(event.start_date), "dd/MM/yyyy", { locale: ptBR }))
+                : 'Data não definida'}
+            </span>
           </div>
           
           <div className="flex items-center text-sm text-muted-foreground">

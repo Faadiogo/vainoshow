@@ -1,29 +1,66 @@
-
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Calendar, Music, Search, Ticket } from 'lucide-react';
+import { Calendar, Search } from 'lucide-react';
 import EventCard from '@/components/EventCard';
-import { Event } from '@/types';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { allEvents } from '@/data/events';
+import { Event, TicketBatch } from '@/types';
+import { supabase } from '@/lib/supabaseClient';
 import { FaTheaterMasks, FaMusic, FaTicketAlt, FaApple } from "react-icons/fa";
-  
 
 export default function HomePage() {
   const [searchTerm, setSearchTerm] = useState('');
-  
-  const formatDate = (date: Date) => {
-    return format(date, "d 'de' MMMM 'de' Y", { locale: ptBR });
-  };
-  
-  const filteredallEvents = allEvents.filter(event => 
-    event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    event.location.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
 
+  useEffect(() => {
+    const fetchEvents = async () => {
+      const { data, error } = await supabase
+        .from('events')
+        .select(`
+          id, title, description, location, image, map_image, start_date, end_date, featured,
+          ticket_batches ( id, name, event_id, price, quantity, available, start_sales_date, end_sales_date )
+        `)
+        .order('start_date', { ascending: true });
+
+      if (error) {
+        console.error('Erro ao carregar eventos:', error);
+      } else {
+        const mapped: Event[] = (data ?? []).map((event: any) => ({
+          id: event.id,
+          title: event.title,
+          description: event.description ?? '',
+          location: event.location ?? '',
+          image: event.image ?? '',
+          mapImage: event.map_image ?? '',
+          start_date: event.start_date,
+          end_date: event.end_date,
+          featured: event.featured ?? false,
+          ticketBatches: (event.ticket_batches ?? []).map((b: any): TicketBatch => ({
+            id: b.id,
+            name: b.name,
+            eventId: b.event_id,
+            price: b.price,
+            quantity: b.quantity,
+            available: b.available,
+            startDate: new Date(b.start_sales_date),
+            endDate: new Date(b.end_sales_date),
+          })),
+          sectors: []
+        }));
+        setEvents(mapped);
+      }
+
+      setLoading(false);
+    };
+
+    fetchEvents();
+  }, []);
+
+  const filteredEvents = events.filter(event => 
+    event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (event.location?.toLowerCase() ?? '').includes(searchTerm.toLowerCase())
+  );
   return (
     <div className="min-h-screen flex flex-col">
       {/* Hero Section */}
@@ -108,12 +145,12 @@ export default function HomePage() {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-20">
-            {filteredallEvents.map((event) => (
+            {filteredEvents.map((event) => (
               <EventCard key={event.id} event={event} />
             ))}
           </div>
           
-          {filteredallEvents.length === 0 && (
+          {filteredEvents.length === 0 && (
             <div className="text-center py-8">
               <p className="text-muted-foreground">Nenhum evento encontrado para "{searchTerm}"</p>
             </div>

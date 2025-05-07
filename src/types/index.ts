@@ -15,7 +15,7 @@ export type TicketBatch = {
   quantity: number;
   available: number;
   startDate: Date;
-  endDate: Date;
+  endDate: Date;  
 };
 
 export type Sector = {
@@ -38,14 +38,18 @@ export type Event = {
   id: string;
   title: string;
   description: string;
-  date: Date;
   location: string;
   image: string;
   mapImage?: string;
-  ticketBatches: TicketBatch[];
-  sectors: Sector[];
+  start_date?: string; // ← novo campo
+  end_date?: string;   // ← novo campo
   featured?: boolean;
+  ticketBatches?: TicketBatch[];
+  sectors?: Sector[];
+  created_at?: string;
+  updated_at?: string;
 };
+
 
 export type Ticket = {
   id: string;

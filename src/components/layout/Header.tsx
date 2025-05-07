@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback} from '@/components/ui/avatar';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Menu, Search, Ticket, User, LogOut } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -38,7 +38,7 @@ const Header = () => {
               <Link to="/my-tickets">Meus Ingressos</Link>
             </Button>
           )}
-          {user?.isAdmin && (
+          {user?.is_admin && (
             <Button variant="ghost" asChild>
               <Link to="/admin">Painel Admin</Link>
             </Button>
@@ -55,7 +55,6 @@ const Header = () => {
               <SheetTrigger asChild>
                 <Button variant="ghost" className="relative h-8 w-8 rounded-full" size="icon">
                   <Avatar className="h-8 w-8">
-                    <AvatarImage src={user.image} alt={user.name} />
                     <AvatarFallback>{initials}</AvatarFallback>
                   </Avatar>
                 </Button>
@@ -64,7 +63,6 @@ const Header = () => {
                 <div className="flex flex-col h-full">
                   <div className="flex items-center gap-2 py-4">
                     <Avatar>
-                      <AvatarImage src={user.image} />
                       <AvatarFallback>{initials}</AvatarFallback>
                     </Avatar>
                     <div>
@@ -88,7 +86,7 @@ const Header = () => {
                       </Link>
                     </Button>
                     
-                    {user.isAdmin && (
+                    {user?.is_admin && (
                       <Button asChild variant="ghost" className="w-full justify-start">
                         <Link to="/admin" onClick={() => setIsOpen(false)}>
                           <Menu className="mr-2 h-4 w-4" />
@@ -141,7 +139,7 @@ const Header = () => {
                     </Button>
                   )}
                   
-                  {user?.isAdmin && (
+                  {user?.is_admin&& (
                     <Button asChild variant="ghost" className="justify-start">
                       <Link to="/admin">Painel Admin</Link>
                     </Button>
