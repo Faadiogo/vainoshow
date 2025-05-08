@@ -4,37 +4,25 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { useToast } from '@/components/ui/use-toast';
-import { Calendar, Edit, MoreHorizontal, Plus, Search, Trash } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Search, Plus, Calendar, MapPin, Edit, Trash, MoreHorizontal } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { allEvents } from '@/data/events';
 
 const AdminEventsPage = () => {
-  const { toast } = useToast();
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   
-  const filteredEvents = allEvents.filter(event => 
-    event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    event.location.toLowerCase().includes(searchTerm.toLowerCase())
+  // Filtrar eventos com base na busca
+  const filteredEvents = allEvents.filter(event =>
+    event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    event.location.toLowerCase().includes(searchQuery.toLowerCase())
   );
   
-  const handleDelete = (eventId: string, eventTitle: string) => {
-    // Simulação de exclusão
-    toast({
-      title: "Evento removido",
-      description: `O evento "${eventTitle}" foi removido com sucesso.`,
-    });
-  };
-
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">Eventos</h1>
-          <p className="text-muted-foreground">Gerenciamento de eventos e lotes de ingressos</p>
-        </div>
+        <h1 className="text-3xl font-bold">Gerenciar Eventos</h1>
         <Button asChild>
           <Link to="/admin/events/new">
             <Plus className="mr-2 h-4 w-4" />
@@ -43,139 +31,112 @@ const AdminEventsPage = () => {
         </Button>
       </div>
       
-      <div className="flex mb-6">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input 
-            placeholder="Buscar eventos..." 
-            className="pl-10 w-full max-w-md"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+      <div className="bg-card rounded-lg border shadow-sm">
+        <div className="p-4 flex items-center justify-between">
+          <div className="relative w-full max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar eventos..."
+              className="pl-9"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm">
+              Filtrar
+            </Button>
+            <Button variant="outline" size="sm">
+              Exportar
+            </Button>
+          </div>
         </div>
-      </div>
-      
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[80px]">ID</TableHead>
-              <TableHead className="w-[250px]">Evento</TableHead>
-              <TableHead>Local</TableHead>
-              <TableHead>Data</TableHead>
-              <TableHead className="w-[150px]">Status</TableHead>
-              <TableHead className="w-[150px]">Ingressos</TableHead>
-              <TableHead className="text-right w-[100px]">Ações</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredEvents.length > 0 ? (
-              filteredEvents.map((event) => {
-                const isUpcoming = new Date(event.date) > new Date();
-                const totalTickets = event.ticketBatches.reduce((sum, batch) => sum + batch.quantity, 0);
-                const availableTickets = event.ticketBatches.reduce((sum, batch) => sum + batch.available, 0);
-                const soldTickets = totalTickets - availableTickets;
-                const percentageSold = totalTickets > 0 
-                  ? Math.round((soldTickets / totalTickets) * 100) 
-                  : 0;
-                
-                return (
-                  <TableRow key={event.id}>
-                    <TableCell className="font-medium">{event.id}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-md overflow-hidden flex-shrink-0">
-                          <img 
-                            src={event.image} 
-                            alt={event.title} 
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        <div>
-                          <div className="font-medium">{event.title}</div>
-                          {event.featured && (
-                            <div className="text-xs text-muted-foreground">Em destaque</div>
-                          )}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {event.location}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center">
-                        <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
-                        <span>
-                          {format(new Date(event.date), "d 'de' MMMM, yyyy", { locale: ptBR })}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium 
-                        ${isUpcoming 
-                          ? "bg-green-100 text-green-800" 
-                          : "bg-amber-100 text-amber-800"}`}
-                      >
-                        {isUpcoming ? "Programado" : "Finalizado"}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="text-sm">
-                          {soldTickets}/{totalTickets} vendidos
-                        </span>
-                        <div className="w-full h-2 bg-muted rounded-full mt-1 overflow-hidden">
-                          <div 
-                            className="h-full bg-primary" 
-                            style={{ width: `${percentageSold}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem asChild>
-                            <Link to={`/admin/events/${event.id}`}>
-                              <Edit className="mr-2 h-4 w-4" />
-                              Editar
-                            </Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleDelete(event.id, event.title)}
-                            className="text-destructive"
-                          >
-                            <Trash className="mr-2 h-4 w-4" />
-                            Excluir
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            ) : (
+        
+        <div className="border-t">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-6">
-                  <p className="text-muted-foreground">
-                    Nenhum evento encontrado para "{searchTerm}"
-                  </p>
-                </TableCell>
+                <TableHead>Evento</TableHead>
+                <TableHead>Data</TableHead>
+                <TableHead>Local</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Destaque</TableHead>
+                <TableHead className="w-[100px] text-right">Ações</TableHead>
               </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-      
-      <div className="mt-4 text-sm text-muted-foreground">
-        Total de eventos: {filteredEvents.length}
+            </TableHeader>
+            <TableBody>
+              {filteredEvents.map((event) => (
+                <TableRow key={event.id}>
+                  <TableCell className="font-medium">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-16 rounded bg-muted overflow-hidden">
+                        <img 
+                          src={event.image} 
+                          alt={event.title} 
+                          className="h-full w-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = "https://placehold.co/100x60?text=Imagem";
+                          }}
+                        />
+                      </div>
+                      <span className="line-clamp-1">{event.title}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center">
+                      <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
+                      {event.start_date ? format(new Date(event.start_date), "dd/MM/yyyy", { locale: ptBR }) : 'Não definida'}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center">
+                      <MapPin className="mr-2 h-4 w-4 text-muted-foreground" />
+                      <span className="truncate max-w-[150px]">{event.location}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {event.start_date && new Date(event.start_date) > new Date() ? (
+                      <Badge variant="outline" className="bg-green-50 text-green-600 border-green-200">
+                        Ativo
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200">
+                        Encerrado
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {event.featured ? (
+                      <Badge variant="outline" className="bg-purple-50 text-purple-600 border-purple-200">
+                        Destacado
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-1">
+                      <Button variant="ghost" size="icon" asChild>
+                        <Link to={`/admin/events/${event.id}`}>
+                          <Edit className="h-4 w-4" />
+                          <span className="sr-only">Editar</span>
+                        </Link>
+                      </Button>
+                      <Button variant="ghost" size="icon">
+                        <Trash className="h-4 w-4" />
+                        <span className="sr-only">Excluir</span>
+                      </Button>
+                      <Button variant="ghost" size="icon">
+                        <MoreHorizontal className="h-4 w-4" />
+                        <span className="sr-only">Mais opções</span>
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       </div>
     </div>
   );
