@@ -1,185 +1,109 @@
-
-import { useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { 
-  CalendarPlus, 
-  ChevronDown, 
-  ChevronRight, 
-  Home, 
-  LogOut, 
-  Settings, 
-  Ticket, 
-  Users,
-  DollarSign,
-  Tag
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import React from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { BarChart, CalendarRange, Users, Settings, Ticket, DollarSign } from 'lucide-react';
+
+interface SidebarItem {
+  title: string;
+  href?: string;
+  icon: React.ComponentType<any>;
+  submenu?: { title: string; href: string }[];
+}
 
 const AdminSidebar = () => {
-  const { user, logout } = useAuth();
-  const location = useLocation();
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({
-    eventos: false,
-  });
+  const { user } = useAuth();
 
-  if (!user?.is_admin) return null;
-
-  const initials = user?.name 
-    ? user.name.split(' ').map(name => name[0]).join('').toUpperCase()
-    : 'A';
-
-  const toggleExpand = (section: string) => {
-    setExpanded(prev => ({
-      ...prev,
-      [section]: !prev[section]
-    }));
-  };
-
-  const isActive = (path: string) => {
-    return location.pathname.startsWith(path);
-  };
-
-  const navItems = [
-    { 
-      icon: Home, 
-      text: 'Dashboard', 
-      path: '/admin' 
+  const sidebarItems: SidebarItem[] = [
+    {
+      title: 'Dashboard',
+      href: '/admin',
+      icon: BarChart,
     },
-    { 
-      icon: CalendarPlus, 
-      text: 'Eventos',
-      path: '/admin/events',
-      expandable: true,
-      section: 'eventos',
-      subItems: [
-        { text: 'Todos os Eventos', path: '/admin/events' },
-        { text: 'Adicionar Evento', path: '/admin/events/new' },
-        { text: 'Lotes de Ingressos', path: '/admin/ticket-batches' }
-      ]
+    {
+      title: 'Eventos',
+      href: '/admin/events',
+      icon: CalendarRange,
     },
-    { 
-      icon: DollarSign, 
-      text: 'Vendas', 
-      path: '/admin/sales' 
+    {
+      title: 'Ingressos',
+      icon: Ticket,
+      submenu: [
+        {
+          title: 'Lotes',
+          href: '/admin/ticket-batches',
+        },
+        {
+          title: 'Criar Ingressos',
+          href: '/admin/tickets/create',
+        },
+        {
+          title: 'Validar Ingressos',
+          href: '/admin/tickets/validate',
+        },
+      ],
     },
-    { 
-      icon: Users, 
-      text: 'Usuários', 
-      path: '/admin/users' 
+    {
+      title: 'Vendas',
+      href: '/admin/sales',
+      icon: DollarSign,
     },
-    { 
-      icon: Settings, 
-      text: 'Configurações', 
-      path: '/admin/settings' 
-    }
+    {
+      title: 'Usuários',
+      href: '/admin/users',
+      icon: Users,
+    },
+    {
+      title: 'Configurações',
+      href: '/admin/settings',
+      icon: Settings,
+    },
   ];
 
+  if (!user?.is_admin) {
+    return null;
+  }
+
   return (
-    <aside className="hidden md:flex h-screen flex-col w-64 bg-sidebar border-r border-sidebar-border">
-      <div className="flex h-16 items-center px-4 border-b border-sidebar-border">
-        <div className="flex items-center space-x-2 text-sidebar-foreground">
-          <div className="space-x-2 w-8 h-8 rounded-md flex items-center justify-center">
-            <img src="https://i.ibb.co/ynfY6q7V/vainoshow-icon-bco.png" alt="vainoshow-icon-bco" className='h-8' />
-            <span className="font-bold text-lg">VaiNoShow</span>
-          </div>
-        </div>
+    <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900 border-r dark:border-gray-700 w-64">
+      <div className="px-4 py-6">
+        <Link to="/admin" className="flex items-center space-x-2 font-semibold">
+          <img src="https://i.ibb.co/ynfY6q7V/vainoshow-icon-bco.png" alt="VaiNoShow" className="h-8" />
+          <span>Admin Panel</span>
+        </Link>
       </div>
-
-      <div className="flex-1 overflow-auto py-2">
-        <nav className="grid gap-1 px-2">
-          {navItems.map((item, idx) => (
-            <div key={idx}>
-              {item.expandable ? (
-                <div>
-                  <Button 
-                    variant="ghost"
-                    className={cn(
-                      "w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                      isActive(item.path) && "bg-sidebar-accent text-sidebar-accent-foreground"
-                    )}
-                    onClick={() => toggleExpand(item.section)}
+      <nav className="flex-1 px-2 py-4 space-y-1">
+        {sidebarItems.map((item, index) => (
+          item.submenu ? (
+            <div key={index} className="space-y-1">
+              <div className="text-sm font-medium text-gray-700 dark:text-gray-400 flex items-center space-x-2">
+                <item.icon className="h-4 w-4" />
+                <span>{item.title}</span>
+              </div>
+              <div className="ml-4 space-y-1">
+                {item.submenu.map((subItem, subIndex) => (
+                  <Link
+                    key={subIndex}
+                    to={subItem.href}
+                    className="block px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-50"
                   >
-                    <item.icon className="mr-2 h-4 w-4" />
-                    {item.text}
-                    {expanded[item.section] ? (
-                      <ChevronDown className="ml-auto h-4 w-4" />
-                    ) : (
-                      <ChevronRight className="ml-auto h-4 w-4" />
-                    )}
-                  </Button>
-                  
-                  {expanded[item.section] && item.subItems && (
-                    <div className="ml-6 mt-1 grid gap-1">
-                      {item.subItems.map((subItem, subIdx) => (
-                        <Button
-                          key={subIdx}
-                          variant="ghost"
-                          asChild
-                          className={cn(
-                            "justify-start h-9 pl-6 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                            location.pathname === subItem.path && 
-                            "bg-sidebar-accent text-sidebar-accent-foreground"
-                          )}
-                        >
-                          <NavLink to={subItem.path}>
-                            {subItem.text}
-                          </NavLink>
-                        </Button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <Button
-                  variant="ghost"
-                  asChild
-                  className={cn(
-                    "w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                    isActive(item.path) && "bg-sidebar-accent text-sidebar-accent-foreground"
-                  )}
-                >
-                  <NavLink to={item.path}>
-                    <item.icon className="mr-2 h-4 w-4" />
-                    {item.text}
-                  </NavLink>
-                </Button>
-              )}
+                    {subItem.title}
+                  </Link>
+                ))}
+              </div>
             </div>
-          ))}
-        </nav>
-      </div>
-
-      <div className="mt-auto border-t border-sidebar-border p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Avatar className="h-8 w-8">
-              <AvatarFallback className="bg-sidebar-accent text-sidebar-accent-foreground">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <p className="text-sm text-sidebar-foreground font-medium truncate max-w-[120px]">
-                {user?.name}
-              </p>
-              <p className="text-xs text-sidebar-foreground/70 truncate max-w-[120px]">
-                {user?.email}
-              </p>
-            </div>
-          </div>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            onClick={logout}
-          >
-            <LogOut className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-    </aside>
+          ) : (
+            <Link
+              key={index}
+              to={item.href || '#'}
+              className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-50"
+            >
+              <item.icon className="mr-2 h-4 w-4" />
+              <span>{item.title}</span>
+            </Link>
+          )
+        ))}
+      </nav>
+    </div>
   );
 };
 

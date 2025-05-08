@@ -75,3 +75,10 @@ export type Ticket = {
   event?: Event;
   eventDate?: EventDate;
 };
+
+export type TicketWithDetails = Ticket & {
+  event: Event;
+  batch?: TicketBatch;
+  sector?: Sector;
+  eventDate?: EventDate;
+};

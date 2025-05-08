@@ -11,6 +11,8 @@ interface QRCodeProps {
   logoSize?: number;
   logoBackgroundColor?: string;
   qrStyle?: 'squares' | 'dots';
+  includeMargin?: boolean;
+  ecLevel?: 'L' | 'M' | 'Q' | 'H';
 }
 
 // Define the type for QRCodeStyling options
@@ -20,6 +22,7 @@ interface QROptions {
   type: 'svg' | 'canvas';
   data: string;
   image?: string;
+  margin?: number;
   dotsOptions: {
     color: string;
     type: string;
@@ -57,6 +60,8 @@ const QRCode: React.FC<QRCodeProps> = ({
   logoSize = 50,
   logoBackgroundColor = '#FFFFFF',
   qrStyle = 'squares',
+  includeMargin = true,
+  ecLevel = 'H',
 }) => {
   const qrRef = useRef<HTMLDivElement>(null);
   const qrCode = useRef<any>();
@@ -69,6 +74,7 @@ const QRCode: React.FC<QRCodeProps> = ({
         type: 'svg',
         data: value,
         image: logoImage,
+        margin: includeMargin ? 10 : 0,
         dotsOptions: {
           color: fgColor,
           type: qrStyle === 'dots' ? 'dots' : 'square'
@@ -85,7 +91,7 @@ const QRCode: React.FC<QRCodeProps> = ({
           backgroundImageAlpha: 1,
         },
         qrOptions: {
-          errorCorrectionLevel: 'H',
+          errorCorrectionLevel: ecLevel,
         },
         cornersSquareOptions: {
           type: 'square',
@@ -109,6 +115,7 @@ const QRCode: React.FC<QRCodeProps> = ({
         width: size,
         height: size,
         image: logoImage,
+        margin: includeMargin ? 10 : 0,
         dotsOptions: {
           color: fgColor,
           type: qrStyle === 'dots' ? 'dots' : 'square',
@@ -119,12 +126,15 @@ const QRCode: React.FC<QRCodeProps> = ({
         imageOptions: {
           imageSize: logoSize / size,
         },
+        qrOptions: {
+          errorCorrectionLevel: ecLevel,
+        },
       });
     }
-  }, [value, size, logoImage, bgColor, fgColor, logoSize, qrStyle]);
+  }, [value, size, logoImage, bgColor, fgColor, logoSize, qrStyle, includeMargin, ecLevel]);
 
   return (
-    <div className="flex items-center justify-center p-4">
+    <div className="flex items-center justify-center">
       <div ref={qrRef} />
     </div>
   );
