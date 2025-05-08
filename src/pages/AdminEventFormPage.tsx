@@ -1,6 +1,7 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { supabase } from '@/lib/supabaseClient';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,41 +11,42 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/components/ui/use-toast';
 import { Calendar as CalendarIcon, Check, Plus, Trash, Grid3X3, MapPin } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Event, Sector } from '@/types';
-import { allEvents } from '@/data/events';
+import { Event } from '@/types';
+import { useAuth } from '@/contexts/AuthContext';
 
 const AdminEventFormPage = () => {
   const { eventId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
   
-  // Encontrar evento existente ou criar novo
-  const existingEvent = eventId ? allEvents.find(e => e.id === eventId) : null;
+  const [loading, setLoading] = useState(false);
+  const [saveLoading, setSaveLoading] = useState(false);
   
-  const [title, setTitle] = useState(existingEvent?.title || '');
-  const [description, setDescription] = useState(existingEvent?.description || '');
-  const [location, setLocation] = useState(existingEvent?.location || '');
-  const [date, setDate] = useState<Date | undefined>(existingEvent?.date);
-  const [time, setTime] = useState(
-    existingEvent ? format(existingEvent.date, 'HH:mm') : '19:00'
-  );
-  const [imageUrl, setImageUrl] = useState(existingEvent?.image || '');
-  const [mapImageUrl, setMapImageUrl] = useState(existingEvent?.mapImage || '');
-  const [featured, setFeatured] = useState(existingEvent?.featured || false);
+  // Formulário principal do evento
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [location, setLocation] = useState('');
+  const [startDate, setStartDate] = useState<Date | undefined>(undefined);
+  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
+  const [time, setTime] = useState('19:00');
+  const [imageUrl, setImageUrl] = useState('');
+  const [mapImageUrl, setMapImageUrl] = useState('');
+  const [featured, setFeatured] = useState(false);
   
   // Estado para gerenciar lotes
-  const [ticketBatches, setTicketBatches] = useState(
-    existingEvent?.ticketBatches || []
-  );
+  const [ticketBatches, setTicketBatches] = useState<any[]>([]);
 
   // Estado para gerenciar setores
-  const [sectors, setSectors] = useState<Sector[]>(
-    existingEvent?.sectors || []
-  );
+  const [sectors, setSectors] = useState<any[]>([]);
+  
+  // Estado para gerenciar datas do evento
+  const [eventDates, setEventDates] = useState<any[]>([]);
   
   // Estado para novo lote
   const [newBatch, setNewBatch] = useState({
@@ -54,6 +56,13 @@ const AdminEventFormPage = () => {
     startDate: new Date(),
     endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // +30 dias
   });
+  
+  // Estado para nova data de evento
+  const [newEventDate, setNewEventDate] = useState({
+    date: format(new Date(), 'yyyy-MM-dd'),
+    artist: '',
+    startTime: '19:00',
+  });
 
   // Estado para novo setor
   const [newSector, setNewSector] = useState({
@@ -62,6 +71,98 @@ const AdminEventFormPage = () => {
     capacity: 100,
     color: '#3B82F6',
   });
+  
+  useEffect(() => {
+    const fetchEventDetails = async () => {
+      if (!eventId) return;
+      
+      setLoading(true);
+      
+      try {
+        // Buscar detalhes do evento
+        const { data: eventData, error: eventError } = await supabase
+          .from('events')
+          .select('*')
+          .eq('id', eventId)
+          .single();
+        
+        if (eventError) throw eventError;
+        
+        // Preencher os campos do formulário
+        setTitle(eventData.title);
+        setDescription(eventData.description || '');
+        setLocation(eventData.location || '');
+        if (eventData.start_date) setStartDate(new Date(eventData.start_date));
+        if (eventData.end_date) setEndDate(new Date(eventData.end_date));
+        setImageUrl(eventData.image || '');
+        setMapImageUrl(eventData.map_image || '');
+        setFeatured(eventData.featured || false);
+        
+        // Buscar lotes de ingressos
+        const { data: batchesData, error: batchesError } = await supabase
+          .from('ticket_batches')
+          .select('*')
+          .eq('event_id', eventId);
+        
+        if (batchesError) throw batchesError;
+        
+        setTicketBatches(batchesData.map(batch => ({
+          id: batch.id,
+          name: batch.name,
+          price: batch.price,
+          quantity: batch.quantity,
+          available: batch.available,
+          startDate: new Date(batch.start_date),
+          endDate: new Date(batch.end_date),
+        })));
+        
+        // Buscar setores
+        const { data: sectorsData, error: sectorsError } = await supabase
+          .from('sectors')
+          .select('*')
+          .eq('event_id', eventId);
+        
+        if (sectorsError) throw sectorsError;
+        
+        setSectors(sectorsData.map(sector => ({
+          id: sector.id,
+          name: sector.name,
+          price: sector.price,
+          capacity: sector.capacity,
+          available: sector.available,
+          color: sector.color,
+          position: sector.position,
+        })));
+        
+        // Buscar datas do evento
+        const { data: datesData, error: datesError } = await supabase
+          .from('event_dates')
+          .select('*')
+          .eq('event_id', eventId);
+        
+        if (datesError) throw datesError;
+        
+        setEventDates(datesData.map(date => ({
+          id: date.id,
+          date: format(new Date(date.date), 'yyyy-MM-dd'),
+          artist: date.artist,
+          startTime: date.start_time,
+        })));
+        
+      } catch (error) {
+        console.error('Erro ao carregar evento:', error);
+        toast({
+          title: 'Erro',
+          description: 'Não foi possível carregar os detalhes do evento.',
+          variant: 'destructive',
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchEventDetails();
+  }, [eventId, toast]);
   
   const handleBatchAdd = () => {
     if (!newBatch.name || newBatch.price <= 0 || newBatch.quantity <= 0) {
@@ -73,12 +174,9 @@ const AdminEventFormPage = () => {
       return;
     }
     
-    const batchId = `batch_${Date.now()}`;
-    
     setTicketBatches([...ticketBatches, {
       ...newBatch,
-      id: batchId,
-      eventId: eventId || 'new',
+      id: `temp_${Date.now()}`,
       available: newBatch.quantity,
     }]);
     
@@ -105,6 +203,43 @@ const AdminEventFormPage = () => {
       description: "Lote removido com sucesso.",
     });
   };
+  
+  const handleEventDateAdd = () => {
+    if (!newEventDate.date || !newEventDate.artist || !newEventDate.startTime) {
+      toast({
+        title: "Dados inválidos",
+        description: "Preencha todos os campos da data corretamente.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setEventDates([...eventDates, {
+      ...newEventDate,
+      id: `temp_${Date.now()}`,
+    }]);
+    
+    // Reset form
+    setNewEventDate({
+      date: format(new Date(), 'yyyy-MM-dd'),
+      artist: '',
+      startTime: '19:00',
+    });
+    
+    toast({
+      title: "Data adicionada",
+      description: `Data para "${newEventDate.artist}" adicionada com sucesso.`,
+    });
+  };
+  
+  const handleEventDateRemove = (dateId: string) => {
+    setEventDates(eventDates.filter(date => date.id !== dateId));
+    
+    toast({
+      title: "Data removida",
+      description: "Data do evento removida com sucesso.",
+    });
+  };
 
   const handleSectorAdd = () => {
     if (!newSector.name || newSector.price <= 0 || newSector.capacity <= 0) {
@@ -116,12 +251,9 @@ const AdminEventFormPage = () => {
       return;
     }
     
-    const sectorId = `sector_${Date.now()}`;
-    
     setSectors([...sectors, {
       ...newSector,
-      id: sectorId,
-      eventId: eventId || 'new',
+      id: `temp_${Date.now()}`,
       available: newSector.capacity,
     }]);
     
@@ -130,7 +262,7 @@ const AdminEventFormPage = () => {
       name: '',
       price: 0,
       capacity: 100,
-      color: '#' + Math.floor(Math.random()*16777215).toString(16), // Gerar cor aleatória
+      color: '#' + Math.floor(Math.random()*16777215).toString(16),
     });
     
     toast({
@@ -148,10 +280,10 @@ const AdminEventFormPage = () => {
     });
   };
   
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!title || !description || !location || !date || !time || !imageUrl) {
+    if (!title || !description || !location || !imageUrl) {
       toast({
         title: "Dados incompletos",
         description: "Por favor, preencha todos os campos obrigatórios.",
@@ -160,31 +292,156 @@ const AdminEventFormPage = () => {
       return;
     }
     
-    if (ticketBatches.length === 0) {
+    if (!user) {
       toast({
-        title: "Sem lotes de ingressos",
-        description: "Adicione pelo menos um lote de ingressos.",
+        title: "Não autorizado",
+        description: "Você precisa estar logado para realizar esta ação.",
         variant: "destructive",
       });
       return;
     }
     
-    // Combinar data e hora
-    const [hours, minutes] = time.split(':').map(Number);
-    const eventDateTime = new Date(date);
-    eventDateTime.setHours(hours, minutes);
+    setSaveLoading(true);
     
-    // Simular salvamento do evento
-    toast({
-      title: "Evento salvo",
-      description: `Evento "${title}" foi salvo com sucesso!`,
-    });
-    
-    // Redirecionar para lista de eventos
-    setTimeout(() => {
-      navigate('/admin/events');
-    }, 1000);
+    try {
+      // Preparar dados do evento
+      const eventData = {
+        title,
+        description,
+        location,
+        image: imageUrl,
+        map_image: mapImageUrl,
+        featured,
+        start_date: startDate ? startDate.toISOString() : null,
+        end_date: endDate ? endDate.toISOString() : null,
+      };
+      
+      let savedEventId = eventId;
+      
+      // Criar ou atualizar evento
+      if (eventId) {
+        // Atualizar evento existente
+        const { error } = await supabase
+          .from('events')
+          .update(eventData)
+          .eq('id', eventId);
+        
+        if (error) throw error;
+      } else {
+        // Criar novo evento
+        const { data, error } = await supabase
+          .from('events')
+          .insert([eventData])
+          .select();
+        
+        if (error) throw error;
+        savedEventId = data[0].id;
+      }
+      
+      if (!savedEventId) throw new Error('Erro ao salvar o evento');
+      
+      // Processar lotes de ingressos
+      for (const batch of ticketBatches) {
+        const batchData = {
+          event_id: savedEventId,
+          name: batch.name,
+          price: batch.price,
+          quantity: batch.quantity,
+          available: batch.available,
+          start_date: batch.startDate.toISOString(),
+          end_date: batch.endDate.toISOString(),
+        };
+        
+        if (batch.id.toString().startsWith('temp_')) {
+          // Criar novo lote
+          await supabase.from('ticket_batches').insert([batchData]);
+        } else {
+          // Atualizar lote existente
+          await supabase
+            .from('ticket_batches')
+            .update(batchData)
+            .eq('id', batch.id);
+        }
+      }
+      
+      // Processar setores
+      for (const sector of sectors) {
+        const sectorData = {
+          event_id: savedEventId,
+          name: sector.name,
+          price: sector.price,
+          capacity: sector.capacity,
+          available: sector.available,
+          color: sector.color,
+          position: sector.position,
+        };
+        
+        if (sector.id.toString().startsWith('temp_')) {
+          // Criar novo setor
+          await supabase.from('sectors').insert([sectorData]);
+        } else {
+          // Atualizar setor existente
+          await supabase
+            .from('sectors')
+            .update(sectorData)
+            .eq('id', sector.id);
+        }
+      }
+      
+      // Processar datas do evento
+      for (const date of eventDates) {
+        const dateData = {
+          event_id: savedEventId,
+          date: new Date(date.date).toISOString(),
+          artist: date.artist,
+          start_time: date.startTime,
+        };
+        
+        if (date.id.toString().startsWith('temp_')) {
+          // Criar nova data
+          await supabase.from('event_dates').insert([dateData]);
+        } else {
+          // Atualizar data existente
+          await supabase
+            .from('event_dates')
+            .update(dateData)
+            .eq('id', date.id);
+        }
+      }
+      
+      toast({
+        title: "Evento salvo",
+        description: `Evento "${title}" foi salvo com sucesso!`,
+      });
+      
+      // Redirecionar para lista de eventos
+      setTimeout(() => {
+        navigate('/admin/events');
+      }, 1000);
+      
+    } catch (error) {
+      console.error('Erro ao salvar evento:', error);
+      toast({
+        title: "Erro",
+        description: "Ocorreu um erro ao salvar o evento.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaveLoading(false);
+    }
   };
+
+  if (!user) {
+    return (
+      <div className="p-6 text-center">
+        <h1 className="text-2xl font-bold mb-4">Acesso restrito</h1>
+        <p className="mb-4">Você precisa estar logado como administrador para acessar esta página.</p>
+        <Button asChild>
+          <Link to="/login">Fazer login</Link>
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">
@@ -197,8 +454,9 @@ const AdminEventFormPage = () => {
       
       <form onSubmit={handleSubmit}>
         <Tabs defaultValue="details" className="w-full">
-          <TabsList className="w-full grid grid-cols-3">
+          <TabsList className="w-full grid grid-cols-4">
             <TabsTrigger value="details">Informações</TabsTrigger>
+            <TabsTrigger value="dates">Datas</TabsTrigger>
             <TabsTrigger value="tickets">Lotes de Ingressos</TabsTrigger>
             <TabsTrigger value="sectors">Setores</TabsTrigger>
           </TabsList>
@@ -245,22 +503,23 @@ const AdminEventFormPage = () => {
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="date">Data *</Label>
+                    <Label htmlFor="startDate">Data de Início</Label>
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button
+                          id="startDate"
                           variant="outline"
                           className="w-full justify-start text-left"
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
-                          {date ? format(date, "PPP", { locale: ptBR }) : "Selecione a data"}
+                          {startDate ? format(startDate, "PPP", { locale: ptBR }) : "Selecione a data"}
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0">
                         <Calendar
                           mode="single"
-                          selected={date}
-                          onSelect={setDate}
+                          selected={startDate}
+                          onSelect={setStartDate}
                           locale={ptBR}
                         />
                       </PopoverContent>
@@ -268,14 +527,27 @@ const AdminEventFormPage = () => {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="time">Horário de início *</Label>
-                    <Input 
-                      id="time" 
-                      type="time" 
-                      value={time} 
-                      onChange={(e) => setTime(e.target.value)} 
-                      required
-                    />
+                    <Label htmlFor="endDate">Data de Término</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          id="endDate"
+                          variant="outline"
+                          className="w-full justify-start text-left"
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {endDate ? format(endDate, "PPP", { locale: ptBR }) : "Selecione a data"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={endDate}
+                          onSelect={setEndDate}
+                          locale={ptBR}
+                        />
+                      </PopoverContent>
+                    </Popover>
                   </div>
                 </div>
                 
@@ -296,7 +568,7 @@ const AdminEventFormPage = () => {
                         alt="Preview" 
                         className="w-full h-full object-cover"
                         onError={(e) => {
-                          e.currentTarget.src = "https://placehold.co/600x400?text=Imagem+Inválida";
+                          (e.target as HTMLImageElement).src = "https://placehold.co/600x400?text=Imagem+Inválida";
                         }}
                       />
                     </div>
@@ -319,7 +591,7 @@ const AdminEventFormPage = () => {
                         alt="Mapa do Evento" 
                         className="w-full h-full object-cover"
                         onError={(e) => {
-                          e.currentTarget.src = "https://placehold.co/600x400?text=Mapa+Inválido";
+                          (e.target as HTMLImageElement).src = "https://placehold.co/600x400?text=Mapa+Inválido";
                         }}
                       />
                     </div>
@@ -335,6 +607,105 @@ const AdminEventFormPage = () => {
                   <Label htmlFor="featured">
                     Destacar evento na página inicial
                   </Label>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="dates" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <CalendarIcon className="mr-2 h-5 w-5" />
+                  Datas do Evento
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {eventDates.length > 0 ? (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium">Datas Cadastradas</h3>
+                    
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Data</TableHead>
+                          <TableHead>Artista/Atração</TableHead>
+                          <TableHead>Horário de Início</TableHead>
+                          <TableHead className="w-[80px]">Ações</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {eventDates.map((date) => (
+                          <TableRow key={date.id}>
+                            <TableCell>{format(new Date(date.date), "dd/MM/yyyy", { locale: ptBR })}</TableCell>
+                            <TableCell>{date.artist}</TableCell>
+                            <TableCell>{date.startTime}</TableCell>
+                            <TableCell>
+                              <Button 
+                                size="icon" 
+                                variant="ghost" 
+                                type="button"
+                                onClick={() => handleEventDateRemove(date.id)}
+                              >
+                                <Trash className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-muted-foreground">
+                    Nenhuma data cadastrada. Adicione uma data abaixo.
+                  </div>
+                )}
+                
+                <div className="pt-4 border-t">
+                  <h3 className="text-lg font-medium mb-4">Adicionar Nova Data</h3>
+                  
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="event-date">Data</Label>
+                        <Input 
+                          id="event-date" 
+                          type="date"
+                          value={newEventDate.date}
+                          onChange={(e) => setNewEventDate({...newEventDate, date: e.target.value})}
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="event-time">Horário de Início</Label>
+                        <Input 
+                          id="event-time" 
+                          type="time"
+                          value={newEventDate.startTime}
+                          onChange={(e) => setNewEventDate({...newEventDate, startTime: e.target.value})}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="event-artist">Artista/Atração</Label>
+                      <Input 
+                        id="event-artist" 
+                        value={newEventDate.artist}
+                        onChange={(e) => setNewEventDate({...newEventDate, artist: e.target.value})}
+                        placeholder="Nome do artista ou atração"
+                      />
+                    </div>
+                    
+                    <Button 
+                      type="button" 
+                      onClick={handleEventDateAdd}
+                      className="w-full mt-2"
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Adicionar Data
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -425,7 +796,7 @@ const AdminEventFormPage = () => {
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label>Data de Início</Label>
+                        <Label>Data de Início das Vendas</Label>
                         <Popover>
                           <PopoverTrigger asChild>
                             <Button
@@ -448,7 +819,7 @@ const AdminEventFormPage = () => {
                       </div>
                       
                       <div className="space-y-2">
-                        <Label>Data de Término</Label>
+                        <Label>Data de Término das Vendas</Label>
                         <Popover>
                           <PopoverTrigger asChild>
                             <Button
@@ -624,12 +995,25 @@ const AdminEventFormPage = () => {
             type="button" 
             variant="outline" 
             onClick={() => navigate('/admin/events')}
+            disabled={saveLoading}
           >
             Cancelar
           </Button>
-          <Button type="submit">
-            <Check className="mr-2 h-4 w-4" />
-            Salvar Evento
+          <Button type="submit" disabled={saveLoading}>
+            {saveLoading ? (
+              <span className="flex items-center">
+                <svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Salvando...
+              </span>
+            ) : (
+              <>
+                <Check className="mr-2 h-4 w-4" />
+                Salvar Evento
+              </>
+            )}
           </Button>
         </div>
       </form>
@@ -638,3 +1022,12 @@ const AdminEventFormPage = () => {
 };
 
 export default AdminEventFormPage;
+
+interface Link {
+  children: React.ReactNode;
+  to: string;
+}
+
+function Link({ children, to }: Link) {
+  return <a href={to}>{children}</a>;
+}

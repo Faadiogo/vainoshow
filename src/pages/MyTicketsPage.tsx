@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,98 +10,132 @@ import { useAuth } from "@/contexts/AuthContext";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import QRCode from "@/components/QRCode";
-
-// Dados simulados para demonstração de ingressos do usuário
-const mockTickets = [
-  {
-    id: "ticket1",
-    userId: "2",
-    eventId: "1",
-    batchId: "batch1",
-    purchaseDate: new Date("2024-10-15T14:30:00"),
-    qrCode: "ticket1_qrcode_data",
-    used: false,
-    event: {
-      id: "1",
-      title: "Festival de Verão 2025",
-      description: "O maior festival de música do verão com as melhores bandas!",
-      date: new Date("2025-01-15T18:00:00"),
-      location: "Praia de Copacabana, Rio de Janeiro",
-      image: "https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?q=80&w=2070&auto=format&fit=crop",
-      ticketBatches: [],
-    },
-    batch: {
-      id: "batch1",
-      name: "1º Lote",
-      eventId: "1",
-      price: 120,
-      quantity: 1000,
-      available: 500,
-      startDate: new Date("2024-10-01"),
-      endDate: new Date("2024-11-15"),
-    }
-  },
-  {
-    id: "ticket2",
-    userId: "2",
-    eventId: "5",
-    batchId: "batch8",
-    purchaseDate: new Date("2024-10-20T10:15:00"),
-    qrCode: "ticket2_qrcode_data",
-    used: false,
-    event: {
-      id: "5",
-      title: "Tributo ao Queen",
-      description: "Uma noite de homenagem à lendária banda Queen.",
-      date: new Date("2024-11-25T20:00:00"),
-      location: "Teatro Municipal, São Paulo",
-      image: "https://images.unsplash.com/photo-1499364615650-ec38552f4f34?q=80&w=2066&auto=format&fit=crop",
-      ticketBatches: [],
-    },
-    batch: {
-      id: "batch8",
-      name: "1º Lote",
-      eventId: "5",
-      price: 100,
-      quantity: 500,
-      available: 100,
-      startDate: new Date("2024-10-01"),
-      endDate: new Date("2024-11-15"),
-    }
-  },
-  {
-    id: "ticket3",
-    userId: "2",
-    eventId: "6",
-    batchId: "batch9",
-    purchaseDate: new Date("2024-10-18T11:45:00"),
-    qrCode: "ticket3_qrcode_data",
-    used: true,
-    event: {
-      id: "6",
-      title: "Festival de Jazz",
-      description: "Os melhores artistas de jazz em um só lugar.",
-      date: new Date("2024-12-15T19:00:00"),
-      location: "Bourbon Street, Salvador",
-      image: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=2070&auto=format&fit=crop",
-      ticketBatches: [],
-    },
-    batch: {
-      id: "batch9",
-      name: "Lote Promocional",
-      eventId: "6",
-      price: 80,
-      quantity: 300,
-      available: 150,
-      startDate: new Date("2024-10-01"),
-      endDate: new Date("2024-11-30"),
-    }
-  }
-];
+import { supabase } from "@/lib/supabaseClient";
+import { Ticket, Event, TicketBatch, Sector, EventDate } from "@/types";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const MyTicketsPage = () => {
   const { user } = useAuth();
   const [selectedTicket, setSelectedTicket] = useState<string | null>(null);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    const fetchUserTickets = async () => {
+      if (!user) return;
+      
+      setLoading(true);
+      
+      try {
+        const { data, error } = await supabase
+          .from('tickets')
+          .select(`
+            id,
+            event_id,
+            batch_id,
+            sector_id,
+            event_date_id,
+            purchase_date,
+            qr_code,
+            custom_code,
+            is_used,
+            events:event_id (
+              id,
+              title,
+              description,
+              location,
+              image
+            ),
+            ticket_batches:batch_id (
+              id,
+              name,
+              price
+            ),
+            sectors:sector_id (
+              id,
+              name,
+              price,
+              color
+            ),
+            event_dates:event_date_id (
+              id,
+              date,
+              artist,
+              start_time
+            )
+          `)
+          .eq('user_id', user.id)
+          .order('purchase_date', { ascending: false });
+          
+        if (error) throw error;
+        
+        // Transformar dados para o formato esperado
+        const formattedTickets: Ticket[] = data.map(item => {
+          const event: Event = {
+            id: item.events.id,
+            title: item.events.title,
+            description: item.events.description,
+            location: item.events.location,
+            image: item.events.image
+          };
+          
+          const batch: TicketBatch | undefined = item.ticket_batches ? {
+            id: item.ticket_batches.id,
+            name: item.ticket_batches.name,
+            price: item.ticket_batches.price,
+            eventId: item.events.id,
+            quantity: 0,
+            available: 0,
+            startDate: new Date(),
+            endDate: new Date()
+          } : undefined;
+          
+          const sector: Sector | undefined = item.sectors ? {
+            id: item.sectors.id,
+            name: item.sectors.name,
+            price: item.sectors.price,
+            eventId: item.events.id,
+            capacity: 0,
+            available: 0,
+            color: item.sectors.color
+          } : undefined;
+          
+          const eventDate: EventDate | undefined = item.event_dates ? {
+            id: item.event_dates.id,
+            eventId: item.events.id,
+            date: new Date(item.event_dates.date),
+            artist: item.event_dates.artist,
+            startTime: item.event_dates.start_time
+          } : undefined;
+          
+          return {
+            id: item.id,
+            userId: user.id,
+            eventId: item.event_id,
+            batchId: item.batch_id,
+            sectorId: item.sector_id,
+            eventDateId: item.event_date_id,
+            purchaseDate: new Date(item.purchase_date),
+            qrCode: item.qr_code,
+            customCode: item.custom_code,
+            used: item.is_used,
+            event,
+            batch,
+            sector,
+            eventDate
+          };
+        });
+        
+        setTickets(formattedTickets);
+      } catch (error) {
+        console.error('Erro ao buscar ingressos:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchUserTickets();
+  }, [user]);
   
   if (!user) {
     return (
@@ -114,14 +148,20 @@ const MyTicketsPage = () => {
     );
   }
 
-  const userTickets = mockTickets.filter(ticket => ticket.userId === user.id);
-  
-  const upcomingTickets = userTickets.filter(
-    ticket => new Date(ticket.event.date) > new Date() && !ticket.used
+  const upcomingTickets = tickets.filter(
+    ticket => 
+      (ticket.eventDate 
+        ? new Date(ticket.eventDate.date) > new Date() 
+        : true) && 
+      !ticket.used
   );
   
-  const pastTickets = userTickets.filter(
-    ticket => new Date(ticket.event.date) <= new Date() || ticket.used
+  const pastTickets = tickets.filter(
+    ticket => 
+      (ticket.eventDate 
+        ? new Date(ticket.eventDate.date) <= new Date() 
+        : false) || 
+      ticket.used
   );
   
   const formatDate = (date: Date) => {
@@ -139,6 +179,42 @@ const MyTicketsPage = () => {
       setSelectedTicket(ticketId);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="container py-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold">Meus Ingressos</h1>
+          <p className="text-muted-foreground">
+            Carregando seus ingressos...
+          </p>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="overflow-hidden">
+              <div className="aspect-[16/9] w-full">
+                <Skeleton className="h-full w-full" />
+              </div>
+              <CardHeader>
+                <Skeleton className="h-6 w-3/4" />
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-full" />
+                  </div>
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-full" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container py-8">
@@ -173,38 +249,53 @@ const MyTicketsPage = () => {
                   >
                     <div className="aspect-[16/9] w-full overflow-hidden">
                       <img
-                        src={ticket.event.image}
-                        alt={ticket.event.title}
+                        src={ticket.event?.image}
+                        alt={ticket.event?.title}
                         className="h-full w-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = "https://placehold.co/600x400?text=Imagem+Indisponível";
+                        }}
                       />
                     </div>
                     
                     <CardHeader className="pb-2">
-                      <CardTitle>{ticket.event.title}</CardTitle>
+                      <CardTitle>{ticket.event?.title}</CardTitle>
                     </CardHeader>
                     
                     <CardContent>
                       <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-2 text-sm">
-                          <div>
-                            <div className="text-muted-foreground">Data</div>
-                            <div className="font-medium">{formatDate(ticket.event.date)}</div>
+                        {ticket.eventDate && (
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div>
+                              <div className="text-muted-foreground">Data</div>
+                              <div className="font-medium">{formatDate(ticket.eventDate.date)}</div>
+                            </div>
+                            <div>
+                              <div className="text-muted-foreground">Horário de início</div>
+                              <div className="font-medium">{ticket.eventDate.startTime}</div>
+                            </div>
                           </div>
-                          <div>
-                            <div className="text-muted-foreground">Horário de início</div>
-                            <div className="font-medium">{formatTime(ticket.event.date)}</div>
+                        )}
+                        
+                        {ticket.eventDate && (
+                          <div className="text-sm">
+                            <div className="text-muted-foreground">Artista/Atração</div>
+                            <div className="font-medium">{ticket.eventDate.artist}</div>
                           </div>
-                        </div>
+                        )}
                         
                         <div className="text-sm">
                           <div className="text-muted-foreground">Local</div>
-                          <div className="font-medium">{ticket.event.location}</div>
+                          <div className="font-medium">{ticket.event?.location}</div>
                         </div>
                         
                         <div className="text-sm">
                           <div className="text-muted-foreground">Ingresso</div>
                           <div className="flex items-center justify-between">
-                            <span className="font-medium">{ticket.batch.name}</span>
+                            <span className="font-medium">
+                              {ticket.batch?.name}
+                              {ticket.sector && ` - ${ticket.sector.name}`}
+                            </span>
                             <Badge variant="outline">
                               {ticket.used ? "Utilizado" : "Válido"}
                             </Badge>
@@ -221,6 +312,13 @@ const MyTicketsPage = () => {
                               value={ticket.qrCode}
                               size={180}
                             />
+                            
+                            {ticket.customCode && (
+                              <div className="mt-2 text-sm text-center">
+                                <span className="text-muted-foreground">Código: </span>
+                                <span className="font-medium">{ticket.customCode}</span>
+                              </div>
+                            )}
                             
                             <div className="mt-4 w-full">
                               <Button variant="outline" className="w-full" size="sm">
@@ -255,38 +353,53 @@ const MyTicketsPage = () => {
                 <Card key={ticket.id} className="overflow-hidden h-full opacity-80">
                   <div className="aspect-[16/9] w-full overflow-hidden">
                     <img
-                      src={ticket.event.image}
-                      alt={ticket.event.title}
+                      src={ticket.event?.image}
+                      alt={ticket.event?.title}
                       className="h-full w-full object-cover grayscale"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = "https://placehold.co/600x400?text=Imagem+Indisponível";
+                      }}
                     />
                   </div>
                   
                   <CardHeader className="pb-2">
-                    <CardTitle>{ticket.event.title}</CardTitle>
+                    <CardTitle>{ticket.event?.title}</CardTitle>
                   </CardHeader>
                   
                   <CardContent>
                     <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <div>
-                          <div className="text-muted-foreground">Data</div>
-                          <div className="font-medium">{formatDate(ticket.event.date)}</div>
+                      {ticket.eventDate && (
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <div className="text-muted-foreground">Data</div>
+                            <div className="font-medium">{formatDate(ticket.eventDate.date)}</div>
+                          </div>
+                          <div>
+                            <div className="text-muted-foreground">Horário de início</div>
+                            <div className="font-medium">{ticket.eventDate.startTime}</div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="text-muted-foreground">Horário de início</div>
-                          <div className="font-medium">{formatTime(ticket.event.date)}</div>
+                      )}
+                      
+                      {ticket.eventDate && (
+                        <div className="text-sm">
+                          <div className="text-muted-foreground">Artista/Atração</div>
+                          <div className="font-medium">{ticket.eventDate.artist}</div>
                         </div>
-                      </div>
+                      )}
                       
                       <div className="text-sm">
                         <div className="text-muted-foreground">Local</div>
-                        <div className="font-medium">{ticket.event.location}</div>
+                        <div className="font-medium">{ticket.event?.location}</div>
                       </div>
                       
                       <div className="text-sm">
                         <div className="text-muted-foreground">Ingresso</div>
                         <div className="flex items-center justify-between">
-                          <span className="font-medium">{ticket.batch.name}</span>
+                          <span className="font-medium">
+                            {ticket.batch?.name}
+                            {ticket.sector && ` - ${ticket.sector.name}`}
+                          </span>
                           <Badge variant="secondary">
                             Evento Finalizado
                           </Badge>

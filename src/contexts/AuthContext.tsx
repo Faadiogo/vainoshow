@@ -1,12 +1,15 @@
+
 import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from '@/components/ui/use-toast';
+import { User, Session } from '@supabase/supabase-js';
 
 interface ExtendedUser {
   id: string;
   email: string;
   name: string;
   is_admin: boolean;
+  image?: string;
 }
 
 interface AuthContextType {
@@ -53,8 +56,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setLoading(false);
     };
 
+    // Carregar a sessão existente
     loadSession();
 
+    // Set up the auth state listener
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
         const profile = await fetchProfile(session.user.id);
@@ -89,27 +94,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const register = async (email: string, password: string, name: string): Promise<boolean> => {
     try {
       setLoading(true);
-      const { data, error } = await supabase.auth.signUp({ email, password });
+      const { data, error } = await supabase.auth.signUp({ 
+        email, 
+        password,
+        options: {
+          data: {
+            name: name
+          }
+        }
+      });
+
       if (error || !data.user) {
         toast({ title: 'Erro no cadastro', description: error?.message || '', variant: 'destructive' });
         setLoading(false);
         return false;
       }
 
-      const { error: insertError } = await supabase
-        .from('profiles')
-        .insert({ id: data.user.id, email, name, is_admin: false });
-
-      if (insertError) {
-        toast({ title: 'Erro ao salvar perfil', description: insertError.message, variant: 'destructive' });
-        setLoading(false);
-        return false;
-      }
-
-      const profile = await fetchProfile(data.user.id);
-      if (profile) setUser(profile);
-
-      toast({ title: 'Conta criada com sucesso', description: 'Bem-vindo(a) ao vainoshow!' });
+      toast({ 
+        title: 'Conta criada com sucesso', 
+        description: 'Verifique seu email para confirmar o cadastro.' 
+      });
       return true;
     } catch (err) {
       toast({ title: 'Erro no cadastro', description: 'Erro inesperado', variant: 'destructive' });

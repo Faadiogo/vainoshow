@@ -3,9 +3,10 @@ import { Link } from 'react-router-dom';
 import { Calendar, MapPin } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-
 import { Event } from '@/types';
 import { cn } from '@/lib/utils';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabaseClient';
 
 interface EventCardProps {
   event: Event;
@@ -13,18 +14,63 @@ interface EventCardProps {
 }
 
 export default function EventCard({ event, className }: EventCardProps) {
-  const formatDate = (date: Date) => {
-    return format(date, "d 'de' MMMM 'de' Y", { locale: ptBR });
+  const [lowestPrice, setLowestPrice] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    const fetchEventPricing = async () => {
+      setLoading(true);
+      
+      try {
+        // Buscar lotes de ingressos disponíveis
+        const { data: batchesData, error: batchesError } = await supabase
+          .from('ticket_batches')
+          .select('price, available')
+          .eq('event_id', event.id)
+          .gt('available', 0);
+          
+        if (batchesError) throw batchesError;
+        
+        // Calcular o menor preço entre os lotes disponíveis
+        if (batchesData && batchesData.length > 0) {
+          const prices = batchesData
+            .filter(batch => batch.available > 0)
+            .map(batch => batch.price);
+            
+          if (prices.length > 0) {
+            const min = Math.min(...prices);
+            setLowestPrice(min);
+          } else {
+            setLowestPrice(null);
+          }
+        } else {
+          setLowestPrice(null);
+        }
+        
+      } catch (error) {
+        console.error('Erro ao buscar preços:', error);
+        setLowestPrice(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    if (event?.id) {
+      fetchEventPricing();
+    }
+  }, [event.id]);
+  
+  const formatDateRange = (startDate?: string, endDate?: string) => {
+    if (!startDate) return 'Data não definida';
+    
+    if (endDate && endDate !== startDate) {
+      return `${format(new Date(startDate), "dd/MM/yyyy", { locale: ptBR })} à ${format(new Date(endDate), "dd/MM/yyyy", { locale: ptBR })}`;
+    }
+    
+    return format(new Date(startDate), "dd/MM/yyyy", { locale: ptBR });
   };
   
-  const lowestPrice = event.ticketBatches.reduce((lowest, batch) => {
-    if (batch.available > 0 && batch.price < lowest) {
-      return batch.price;
-    }
-    return lowest;
-  }, Infinity);
-  
-  const hasTickets = lowestPrice !== Infinity;
+  const hasTickets = lowestPrice !== null;
   const formattedPrice = hasTickets ? 
     `R$ ${lowestPrice.toFixed(2).replace('.', ',')}` : 
     'Esgotado';
@@ -39,6 +85,9 @@ export default function EventCard({ event, className }: EventCardProps) {
           src={event.image}
           alt={event.title}
           className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+          onError={(e) => {
+            (e.target as HTMLImageElement).src = "https://placehold.co/600x400?text=Imagem+Indisponível";
+          }}
         />
       </div>
       
@@ -55,11 +104,7 @@ export default function EventCard({ event, className }: EventCardProps) {
           <div className="flex items-center text-sm text-muted-foreground">
             <Calendar className="h-4 w-4 mr-2 flex-shrink-0" />
             <span>
-              {event.start_date
-                ? (event.end_date && event.end_date !== event.start_date
-                    ? `${format(new Date(event.start_date), "dd/MM/yyyy", { locale: ptBR })} à ${format(new Date(event.end_date), "dd/MM/yyyy", { locale: ptBR })}`
-                    : format(new Date(event.start_date), "dd/MM/yyyy", { locale: ptBR }))
-                : 'Data não definida'}
+              {formatDateRange(event.start_date, event.end_date)}
             </span>
           </div>
           
@@ -74,7 +119,9 @@ export default function EventCard({ event, className }: EventCardProps) {
             "font-medium",
             !hasTickets && "text-destructive"
           )}>
-            {hasTickets ? (
+            {loading ? (
+              <span className="text-muted-foreground">Carregando...</span>
+            ) : hasTickets ? (
               <span>A partir de <span className="text-event-purple">{formattedPrice}</span></span>
             ) : (
               formattedPrice

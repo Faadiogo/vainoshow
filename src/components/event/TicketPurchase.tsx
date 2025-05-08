@@ -1,17 +1,20 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Share2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/components/ui/use-toast';
-import { TicketBatch, Sector, Event } from '@/types';
+import { TicketBatch, Sector, Event, EventDate } from '@/types';
 import { User } from '@/types';
 import QRCode from '@/components/QRCode';
+import { supabase } from '@/lib/supabaseClient';
+import { v4 as uuidv4 } from 'uuid';
 
 interface TicketPurchaseProps {
   event: Event;
@@ -23,21 +26,104 @@ const TicketPurchase: React.FC<TicketPurchaseProps> = ({ event, user }) => {
   
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [selectedSectorId, setSelectedSectorId] = useState<string | null>(null);
+  const [selectedDateId, setSelectedDateId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [showQrCode, setShowQrCode] = useState(false);
   const [qrValue, setQrValue] = useState('');
+  const [customQrCode, setCustomQrCode] = useState('');
   const [isPurchasing, setIsPurchasing] = useState(false);
+  const [eventDates, setEventDates] = useState<EventDate[]>([]);
+  const [ticketBatches, setTicketBatches] = useState<TicketBatch[]>([]);
+  const [sectors, setSectors] = useState<Sector[]>([]);
+  const [loading, setLoading] = useState(true);
   
-  // Filtrar lotes disponíveis (com ingressos e dentro do período de validade)
-  const availableBatches = event.ticketBatches.filter(batch => {
-    const now = new Date();
-    return batch.available > 0 && 
-           batch.startDate <= now && 
-           batch.endDate >= now;
-  });
-
-  // Filtrar setores com ingressos disponíveis
-  const availableSectors = event.sectors?.filter(sector => sector.available > 0) || [];
+  useEffect(() => {
+    const fetchEventDetails = async () => {
+      setLoading(true);
+      
+      try {
+        // Buscar datas do evento
+        const { data: datesData, error: datesError } = await supabase
+          .from('event_dates')
+          .select('*')
+          .eq('event_id', event.id)
+          .order('date', { ascending: true });
+        
+        if (datesError) throw datesError;
+        
+        // Buscar lotes disponíveis
+        const now = new Date();
+        const { data: batchesData, error: batchesError } = await supabase
+          .from('ticket_batches')
+          .select('*')
+          .eq('event_id', event.id)
+          .gt('available', 0)
+          .lte('start_date', now.toISOString())
+          .gte('end_date', now.toISOString())
+          .order('price', { ascending: true });
+        
+        if (batchesError) throw batchesError;
+        
+        // Buscar setores disponíveis
+        const { data: sectorsData, error: sectorsError } = await supabase
+          .from('sectors')
+          .select('*')
+          .eq('event_id', event.id)
+          .gt('available', 0)
+          .order('price', { ascending: true });
+        
+        if (sectorsError) throw sectorsError;
+        
+        const formattedDates: EventDate[] = datesData?.map(date => ({
+          id: date.id,
+          eventId: date.event_id,
+          date: new Date(date.date),
+          artist: date.artist,
+          startTime: date.start_time
+        })) || [];
+        
+        const formattedBatches: TicketBatch[] = batchesData?.map(batch => ({
+          id: batch.id,
+          name: batch.name,
+          eventId: batch.event_id,
+          price: batch.price,
+          quantity: batch.quantity,
+          available: batch.available,
+          startDate: new Date(batch.start_date),
+          endDate: new Date(batch.end_date)
+        })) || [];
+        
+        const formattedSectors: Sector[] = sectorsData?.map(sector => ({
+          id: sector.id,
+          name: sector.name,
+          eventId: sector.event_id,
+          price: sector.price,
+          capacity: sector.capacity,
+          available: sector.available,
+          color: sector.color,
+          position: sector.position
+        })) || [];
+        
+        setEventDates(formattedDates);
+        setTicketBatches(formattedBatches);
+        setSectors(formattedSectors);
+        
+      } catch (error) {
+        console.error('Erro ao carregar detalhes do evento:', error);
+        toast({
+          title: 'Erro',
+          description: 'Não foi possível carregar informações do evento.',
+          variant: 'destructive',
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    if (event?.id) {
+      fetchEventDetails();
+    }
+  }, [event?.id, toast]);
   
   const handleBatchSelect = (batchId: string) => {
     setSelectedBatchId(batchId);
@@ -49,6 +135,10 @@ const TicketPurchase: React.FC<TicketPurchaseProps> = ({ event, user }) => {
     setSelectedSectorId(sectorId);
   };
   
+  const handleDateSelect = (dateId: string) => {
+    setSelectedDateId(dateId);
+  };
+  
   const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseInt(e.target.value);
     if (!isNaN(value) && value >= 1) {
@@ -58,7 +148,17 @@ const TicketPurchase: React.FC<TicketPurchaseProps> = ({ event, user }) => {
     }
   };
   
-  const handlePurchase = () => {
+  const generateQRCode = () => {
+    // Se tiver um código personalizado, usamos ele, senão geramos um aleatório
+    if (customQrCode.trim()) {
+      return customQrCode.trim();
+    }
+    
+    // Gerar um UUID aleatório para o QR Code
+    return uuidv4();
+  };
+  
+  const handlePurchase = async () => {
     if (!user) {
       toast({
         title: "Você precisa estar logado",
@@ -77,7 +177,7 @@ const TicketPurchase: React.FC<TicketPurchaseProps> = ({ event, user }) => {
       return;
     }
 
-    if (availableSectors.length > 0 && !selectedSectorId) {
+    if (sectors.length > 0 && !selectedSectorId) {
       toast({
         title: "Selecione um setor",
         description: "Escolha um setor para continuar.",
@@ -86,10 +186,19 @@ const TicketPurchase: React.FC<TicketPurchaseProps> = ({ event, user }) => {
       return;
     }
     
-    const selectedBatch = event.ticketBatches.find(b => b.id === selectedBatchId);
+    if (eventDates.length > 0 && !selectedDateId) {
+      toast({
+        title: "Selecione uma data",
+        description: "Escolha uma data do evento para continuar.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    const selectedBatch = ticketBatches.find(b => b.id === selectedBatchId);
     if (!selectedBatch) return;
     
-    const selectedSector = selectedSectorId ? event.sectors?.find(s => s.id === selectedSectorId) : null;
+    const selectedSector = selectedSectorId ? sectors.find(s => s.id === selectedSectorId) : null;
     
     let availableQuantity = selectedBatch.available;
     if (selectedSector) {
@@ -107,31 +216,72 @@ const TicketPurchase: React.FC<TicketPurchaseProps> = ({ event, user }) => {
     
     setIsPurchasing(true);
     
-    // Simulação de processamento de pagamento
-    setTimeout(() => {
-      // Gerar QR Code PIX
-      const totalValue = selectedSector 
-        ? selectedSector.price * quantity 
-        : selectedBatch.price * quantity;
-
-      const pixData = {
-        eventId: event.id,
-        eventName: event.title,
-        batchId: selectedBatch.id,
-        batchName: selectedBatch.name,
-        sectorId: selectedSector?.id,
-        sectorName: selectedSector?.name,
-        userId: user.id,
-        quantity,
-        totalValue,
-        timestamp: new Date().toISOString()
+    try {
+      // Gerar código QR
+      const qrCode = generateQRCode();
+      
+      // Inserir ticket no banco de dados
+      const ticketData = {
+        user_id: user.id,
+        event_id: event.id,
+        batch_id: selectedBatchId,
+        sector_id: selectedSectorId || null,
+        event_date_id: selectedDateId || null,
+        qr_code: qrCode,
+        custom_code: customQrCode.trim() || null,
+        is_used: false
       };
       
-      // Simular QR Code Pix
-      setQrValue(JSON.stringify(pixData));
+      const { data, error } = await supabase
+        .from('tickets')
+        .insert([ticketData])
+        .select();
+      
+      if (error) throw error;
+      
+      // Atualizar quantidade disponível no lote
+      const { error: batchError } = await supabase
+        .from('ticket_batches')
+        .update({ available: selectedBatch.available - quantity })
+        .eq('id', selectedBatchId);
+      
+      if (batchError) throw batchError;
+      
+      // Se tiver setor selecionado, atualizar quantidade disponível no setor
+      if (selectedSector) {
+        const { error: sectorError } = await supabase
+          .from('sectors')
+          .update({ available: selectedSector.available - quantity })
+          .eq('id', selectedSectorId);
+        
+        if (sectorError) throw sectorError;
+      }
+      
+      // Exibir QR Code
+      setQrValue(qrCode);
       setShowQrCode(true);
+      
+      // Atualizar dados locais
+      if (selectedBatch) {
+        const updatedBatch = {...selectedBatch, available: selectedBatch.available - quantity};
+        setTicketBatches(ticketBatches.map(b => b.id === selectedBatchId ? updatedBatch : b));
+      }
+      
+      if (selectedSector) {
+        const updatedSector = {...selectedSector, available: selectedSector.available - quantity};
+        setSectors(sectors.map(s => s.id === selectedSectorId ? updatedSector : s));
+      }
+      
+    } catch (error) {
+      console.error('Erro ao comprar ingresso:', error);
+      toast({
+        title: "Erro na compra",
+        description: "Não foi possível processar a compra. Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
       setIsPurchasing(false);
-    }, 1500);
+    }
   };
   
   const formatDate = (date: Date) => {
@@ -141,17 +291,23 @@ const TicketPurchase: React.FC<TicketPurchaseProps> = ({ event, user }) => {
   // Verificar preço baseado na seleção do lote e setor
   const getPrice = () => {
     if (selectedSectorId) {
-      const sector = event.sectors?.find(s => s.id === selectedSectorId);
+      const sector = sectors.find(s => s.id === selectedSectorId);
       return sector?.price || 0;
     } 
     
     if (selectedBatchId) {
-      const batch = event.ticketBatches.find(b => b.id === selectedBatchId);
+      const batch = ticketBatches.find(b => b.id === selectedBatchId);
       return batch?.price || 0;
     }
 
     return 0;
   };
+
+  // Filter available batches (with tickets and within valid period)
+  const availableBatches = ticketBatches.filter(batch => batch.available > 0);
+
+  // Filter available sectors with tickets
+  const availableSectors = sectors.filter(sector => sector.available > 0);
   
   return (
     <>
@@ -160,10 +316,31 @@ const TicketPurchase: React.FC<TicketPurchaseProps> = ({ event, user }) => {
           <CardHeader>
             <CardTitle>Ingressos</CardTitle>
             <CardDescription>
-              Selecione o tipo de ingresso e a quantidade
+              Selecione o tipo de ingresso, data e a quantidade
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            {eventDates.length > 0 && (
+              <div>
+                <h3 className="text-sm font-medium mb-2">Selecione uma Data</h3>
+                <Select 
+                  value={selectedDateId || undefined} 
+                  onValueChange={handleDateSelect}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione uma data" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {eventDates.map(date => (
+                      <SelectItem key={date.id} value={date.id}>
+                        {formatDate(date.date)} - {date.artist} ({date.startTime})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            
             {availableBatches.length > 0 ? (
               <>
                 <div>
@@ -191,7 +368,6 @@ const TicketPurchase: React.FC<TicketPurchaseProps> = ({ event, user }) => {
                   </RadioGroup>
                 </div>
 
-                {/* Mostrar seleção de setores se existirem */}
                 {availableSectors.length > 0 && (
                   <div className="pt-2">
                     <h3 className="text-sm font-medium mb-2">Setores Disponíveis</h3>
@@ -260,6 +436,19 @@ const TicketPurchase: React.FC<TicketPurchaseProps> = ({ event, user }) => {
                   </div>
                 </div>
                 
+                <div className="space-y-2">
+                  <Label htmlFor="customQrCode">Código Personalizado (opcional)</Label>
+                  <Input 
+                    id="customQrCode" 
+                    value={customQrCode}
+                    onChange={(e) => setCustomQrCode(e.target.value)}
+                    placeholder="Deixe em branco para gerar um código automaticamente"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Você pode personalizar o código QR do seu ingresso ou deixar em branco para gerar um automático.
+                  </p>
+                </div>
+                
                 {selectedBatchId && (
                   <div className="text-sm">
                     <div className="flex justify-between py-1">
@@ -295,7 +484,8 @@ const TicketPurchase: React.FC<TicketPurchaseProps> = ({ event, user }) => {
               onClick={handlePurchase}
               disabled={
                 !selectedBatchId || 
-                (availableSectors.length > 0 && !selectedSectorId) || 
+                (availableSectors.length > 0 && !selectedSectorId) ||
+                (eventDates.length > 0 && !selectedDateId) ||
                 isPurchasing || 
                 availableBatches.length === 0
               }
@@ -332,6 +522,11 @@ const TicketPurchase: React.FC<TicketPurchaseProps> = ({ event, user }) => {
                 Após o pagamento, seu ingresso será enviado para seu email e 
                 também ficará disponível na seção "Meus Ingressos".
               </p>
+              {customQrCode && (
+                <p className="mt-2 text-sm">
+                  Código personalizado: <span className="font-bold">{customQrCode}</span>
+                </p>
+              )}
             </div>
           </CardContent>
           <CardFooter>
@@ -361,6 +556,10 @@ const TicketPurchase: React.FC<TicketPurchaseProps> = ({ event, user }) => {
           <li className="flex items-start">
             <span className="mr-2">•</span>
             <span>Apresente o QR code na entrada do evento para validação.</span>
+          </li>
+          <li className="flex items-start">
+            <span className="mr-2">•</span>
+            <span>Para eventos com múltiplas datas, certifique-se de escolher a data correta.</span>
           </li>
         </ul>
       </div>
