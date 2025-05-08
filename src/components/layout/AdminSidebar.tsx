@@ -23,7 +23,7 @@ const Sidebar = () => {
     eventos: false,
   });
 
-  if (!user?.isAdmin) return null;
+  if (!user?.is_admin) return null;
 
   const initials = user?.name 
     ? user.name.split(' ').map(name => name[0]).join('').toUpperCase()
