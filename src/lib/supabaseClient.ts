@@ -16,43 +16,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 
 // Database setup function (keeping existing functionality)
 export const setupDatabase = async () => {
-  // Verificar se a tabela site_settings existe
-  const { error: checkError } = await supabase
-    .from('site_settings')
-    .select('id')
-    .limit(1);
-  
-  // Se a tabela não existir, criaremos
-  if (checkError && checkError.code === 'PGRST116') {
-    try {
-      // Criar a tabela site_settings
-      await supabase.rpc('create_site_settings_table');
-      
-      console.log('Tabela site_settings criada com sucesso');
-      
-      // Inserir configurações iniciais
-      await supabase
-        .from('site_settings')
-        .insert([
-          {
-            id: 1,
-            site_name: 'VaiNoShow',
-            site_description: 'Plataforma de venda de ingressos para shows e eventos',
-            contact_email: 'contato@vainoshow.com',
-            enable_tickets: true,
-            enable_registrations: true,
-            maintenance_mode: false,
-            privacy_policy: '',
-            terms_of_service: ''
-          }
-        ]);
-      
-      console.log('Configurações iniciais inseridas com sucesso');
-    } catch (error) {
-      console.error('Erro ao configurar o banco de dados:', error);
-    }
-  }
+  // For mock data in development, this function doesn't need to run
+  console.log('Using mock data for development');
 };
 
-// Chamar a função de setup
-setupDatabase();
+// Don't call setupDatabase in development when using mock data
+// setupDatabase();

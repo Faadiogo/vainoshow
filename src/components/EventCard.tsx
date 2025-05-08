@@ -6,7 +6,6 @@ import { ptBR } from 'date-fns/locale';
 import { Event } from '@/types';
 import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabaseClient';
 
 interface EventCardProps {
   event: Event;
@@ -18,47 +17,30 @@ export default function EventCard({ event, className }: EventCardProps) {
   const [loading, setLoading] = useState(true);
   
   useEffect(() => {
-    const fetchEventPricing = async () => {
+    const calculateLowestPrice = () => {
       setLoading(true);
       
       try {
-        // Buscar lotes de ingressos disponíveis
-        const { data: batchesData, error: batchesError } = await supabase
-          .from('ticket_batches')
-          .select('price, available')
-          .eq('event_id', event.id)
-          .gt('available', 0);
-          
-        if (batchesError) throw batchesError;
+        // Verificar lotes disponíveis no evento
+        const availableBatches = event.ticketBatches?.filter(batch => batch.available > 0) || [];
         
-        // Calcular o menor preço entre os lotes disponíveis
-        if (batchesData && batchesData.length > 0) {
-          const prices = batchesData
-            .filter(batch => batch.available > 0)
-            .map(batch => batch.price);
-            
-          if (prices.length > 0) {
-            const min = Math.min(...prices);
-            setLowestPrice(min);
-          } else {
-            setLowestPrice(null);
-          }
+        if (availableBatches.length > 0) {
+          // Encontrar o menor preço entre os lotes disponíveis
+          const prices = availableBatches.map(batch => batch.price);
+          setLowestPrice(Math.min(...prices));
         } else {
           setLowestPrice(null);
         }
-        
       } catch (error) {
-        console.error('Erro ao buscar preços:', error);
+        console.error('Erro ao calcular preços:', error);
         setLowestPrice(null);
       } finally {
         setLoading(false);
       }
     };
     
-    if (event?.id) {
-      fetchEventPricing();
-    }
-  }, [event.id]);
+    calculateLowestPrice();
+  }, [event]);
   
   const formatDateRange = (startDate?: string, endDate?: string) => {
     if (!startDate) return 'Data não definida';
@@ -72,35 +54,35 @@ export default function EventCard({ event, className }: EventCardProps) {
   
   const hasTickets = lowestPrice !== null;
   const formattedPrice = hasTickets ? 
-    `R$ ${lowestPrice.toFixed(2).replace('.', ',')}` : 
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lowestPrice) : 
     'Esgotado';
 
   return (
     <Link 
       to={`/events/${event.id}`} 
-      className={cn("event-card flex flex-col h-full", className)}
+      className={cn("event-card flex flex-col h-full rounded-lg border border-border overflow-hidden bg-card transition-all hover:shadow-md", className)}
     >
-      <div className="aspect-[16/9] w-full overflow-hidden">
+      <div className="aspect-[16/9] w-full overflow-hidden relative">
         <img
           src={event.image}
           alt={event.title}
-          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+          className="h-full w-full object-cover transition-transform duration-300 hover:scale-105"
           onError={(e) => {
             (e.target as HTMLImageElement).src = "https://placehold.co/600x400?text=Imagem+Indisponível";
           }}
         />
+        
+        {event.featured && (
+          <div className="absolute top-2 right-2 bg-purple-600 text-white px-2 py-1 text-xs rounded-md font-medium">
+            Destaque
+          </div>
+        )}
       </div>
       
-      {event.featured && (
-        <div className="event-badge">
-          Destaque
-        </div>
-      )}
-      
-      <div className="p-5 flex flex-col flex-1">
-        <h3 className="font-semibold text-lg line-clamp-2">{event.title}</h3>
+      <div className="p-4 flex flex-col flex-1">
+        <h3 className="font-semibold text-lg line-clamp-2 mb-2">{event.title}</h3>
         
-        <div className="mt-2 space-y-1">
+        <div className="space-y-2 mb-4">
           <div className="flex items-center text-sm text-muted-foreground">
             <Calendar className="h-4 w-4 mr-2 flex-shrink-0" />
             <span>
@@ -114,7 +96,7 @@ export default function EventCard({ event, className }: EventCardProps) {
           </div>
         </div>
         
-        <div className="mt-auto pt-4 flex items-center justify-between">
+        <div className="mt-auto pt-2 flex items-center justify-between">
           <div className={cn(
             "font-medium",
             !hasTickets && "text-destructive"
@@ -122,10 +104,14 @@ export default function EventCard({ event, className }: EventCardProps) {
             {loading ? (
               <span className="text-muted-foreground">Carregando...</span>
             ) : hasTickets ? (
-              <span>A partir de <span className="text-event-purple">{formattedPrice}</span></span>
+              <span>A partir de <span className="text-purple-600">{formattedPrice}</span></span>
             ) : (
               formattedPrice
             )}
+          </div>
+          
+          <div className="text-sm bg-secondary text-secondary-foreground px-2 py-1 rounded">
+            {hasTickets ? "Disponível" : "Esgotado"}
           </div>
         </div>
       </div>

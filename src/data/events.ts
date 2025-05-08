@@ -1,3 +1,4 @@
+
 import { Event, TicketBatch, Sector, EventDate } from '@/types';
 
 export const allEvents: Event[] = [
@@ -113,7 +114,7 @@ export const allEvents: Event[] = [
         eventId: '2',
         price: 250,
         quantity: 2000,
-        available: 0,
+        available: 250,
         startDate: new Date('2024-10-01'),
         endDate: new Date('2024-11-30'),
       },
@@ -308,7 +309,7 @@ export const allEvents: Event[] = [
         eventId: '5',
         price: 100,
         quantity: 500,
-        available: 100,
+        available: 250,
         startDate: new Date('2024-10-01'),
         endDate: new Date('2024-11-15'),
       },
@@ -324,27 +325,27 @@ export const allEvents: Event[] = [
         color: '#DC2626',
       },
       {
-        id: 'sector6',
+        id: 'sector6_event5',
         name: 'VIP',
-        eventId: '2',
+        eventId: '5',
         price: 600,
         capacity: 1000,
         available: 600,
         color: '#F59E0B',
       },
       {
-        id: 'sector7',
+        id: 'sector7_event5',
         name: 'Pista Premium',
-        eventId: '2',
+        eventId: '5',
         price: 450,
         capacity: 3000,
         available: 1800,
         color: '#2563EB',
       },
       {
-        id: 'sector8',
+        id: 'sector8_event5',
         name: 'Pista',
-        eventId: '2',
+        eventId: '5',
         price: 350,
         capacity: 5000,
         available: 2500,
@@ -363,12 +364,12 @@ export const allEvents: Event[] = [
     end_date: '2024-06-08',
     ticketBatches: [
       {
-        id: 'batch8',
+        id: 'batch8_event6',
         name: '1º Lote',
         eventId: '6',
         price: 100,
         quantity: 500,
-        available: 100,
+        available: 300,
         startDate: new Date('2024-10-01'),
         endDate: new Date('2024-11-15'),
       },

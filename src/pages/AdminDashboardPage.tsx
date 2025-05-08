@@ -2,10 +2,11 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AreaChart, BarChart } from "@/components/ui/chart";
+import { ChartContainer, ChartTooltipContent, ChartTooltip } from "@/components/ui/chart";
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { allEvents } from '@/data/events';
+import { BarChart, AreaChart, ResponsiveContainer, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Area } from 'recharts';
 
 const AdminDashboardPage = () => {
   const [activeTab, setActiveTab] = useState<string>('overview');
@@ -39,7 +40,7 @@ const AdminDashboardPage = () => {
   ];
   
   const barChartData = allEvents.map(event => ({
-    name: event.title,
+    name: event.title.length > 15 ? event.title.substring(0, 15) + '...' : event.title,
     total: Math.floor(Math.random() * 1000) + 100,
   })).slice(0, 5);
 
@@ -180,17 +181,21 @@ const AdminDashboardPage = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="pl-2">
-                <AreaChart
-                  data={areaChartData}
-                  height={350}
-                  index="name"
-                  categories={["total"]}
-                  colors={["violet"]}
-                  valueFormatter={(value: number) =>
-                    `R$ ${Intl.NumberFormat("pt-BR").format(value)}`
-                  }
-                  yAxisWidth={65}
-                />
+                <ResponsiveContainer width="100%" height={350}>
+                  <AreaChart data={areaChartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Area 
+                      type="monotone" 
+                      dataKey="total" 
+                      stroke="#8884d8" 
+                      fill="#8884d8"
+                      fillOpacity={0.3} 
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
               </CardContent>
             </Card>
             <Card className="col-span-3">
@@ -201,16 +206,15 @@ const AdminDashboardPage = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <BarChart
-                  data={barChartData}
-                  index="name"
-                  categories={["total"]}
-                  colors={["violet"]}
-                  valueFormatter={(value: number) =>
-                    `${Intl.NumberFormat("pt-BR").format(value)} ingressos`
-                  }
-                  yAxisWidth={65}
-                />
+                <ResponsiveContainer width="100%" height={350}>
+                  <BarChart data={barChartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Bar dataKey="total" fill="#8884d8" />
+                  </BarChart>
+                </ResponsiveContainer>
               </CardContent>
             </Card>
           </div>
