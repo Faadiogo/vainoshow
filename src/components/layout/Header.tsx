@@ -21,11 +21,11 @@ import {
 } from '@/components/ui/sheet';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Menu, Ticket, User, Settings, LogOut, ChevronDown } from 'lucide-react';
-import { useMobile } from '@/hooks/use-mobile';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const Header = () => {
   const { user, logout } = useAuth();
-  const isMobile = useMobile();
+  const isMobile = useIsMobile();
 
   const navItems = [
     { label: 'Página Inicial', path: '/' },
