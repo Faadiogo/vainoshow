@@ -10,13 +10,15 @@ import {
   LogOut, 
   Settings, 
   Ticket, 
-  Users
+  Users,
+  DollarSign,
+  Tag
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
 
-const Sidebar = () => {
+const AdminSidebar = () => {
   const { user, logout } = useAuth();
   const location = useLocation();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
@@ -59,7 +61,7 @@ const Sidebar = () => {
       ]
     },
     { 
-      icon: Ticket, 
+      icon: DollarSign, 
       text: 'Vendas', 
       path: '/admin/sales' 
     },
@@ -181,4 +183,4 @@ const Sidebar = () => {
   );
 };
 
-export default Sidebar;
+export default AdminSidebar;

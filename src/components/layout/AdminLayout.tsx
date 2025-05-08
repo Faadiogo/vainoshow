@@ -13,7 +13,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
   const { user } = useAuth();
   
   // Verificar se o usuário é admin
-  if (!user || !user.isAdmin) {
+  if (!user || !user.is_admin) {
     return <Navigate to="/login" />;
   }
   
