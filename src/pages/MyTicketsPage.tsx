@@ -1,424 +1,131 @@
 
-import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TabsContent, TabsList, TabsTrigger, Tabs } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { Share2 } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import QRCode from "@/components/QRCode";
-import { supabase } from "@/lib/supabaseClient";
-import { Ticket, Event, TicketBatch, Sector, EventDate } from "@/types";
-import { Skeleton } from "@/components/ui/skeleton";
+import { useState } from 'react';
+import { Helmet } from 'react-helmet-async';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { CheckCircle, XCircle, Calendar, MapPin, Ticket } from 'lucide-react';
+import QRCode from '@/components/QRCode';
+import { mockTickets } from '@/data/events';
+import { TicketWithDetails } from '@/types';
 
 const MyTicketsPage = () => {
-  const { user } = useAuth();
-  const [selectedTicket, setSelectedTicket] = useState<string | null>(null);
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [loading, setLoading] = useState(true);
-  
-  useEffect(() => {
-    const fetchUserTickets = async () => {
-      if (!user) return;
-      
-      setLoading(true);
-      
-      try {
-        const { data, error } = await supabase
-          .from('tickets')
-          .select(`
-            id,
-            event_id,
-            batch_id,
-            sector_id,
-            event_date_id,
-            purchase_date,
-            qr_code,
-            custom_code,
-            is_used,
-            events:event_id (
-              id,
-              title,
-              description,
-              location,
-              image
-            ),
-            ticket_batches:batch_id (
-              id,
-              name,
-              price
-            ),
-            sectors:sector_id (
-              id,
-              name,
-              price,
-              color
-            ),
-            event_dates:event_date_id (
-              id,
-              date,
-              artist,
-              start_time
-            )
-          `)
-          .eq('user_id', user.id)
-          .order('purchase_date', { ascending: false });
-          
-        if (error) throw error;
-        
-        // Transformar dados para o formato esperado
-        const formattedTickets: Ticket[] = data.map(item => {
-          const event: Event = {
-            id: item.events.id,
-            title: item.events.title,
-            description: item.events.description,
-            location: item.events.location,
-            image: item.events.image
-          };
-          
-          const batch: TicketBatch | undefined = item.ticket_batches ? {
-            id: item.ticket_batches.id,
-            name: item.ticket_batches.name,
-            price: item.ticket_batches.price,
-            eventId: item.events.id,
-            quantity: 0,
-            available: 0,
-            startDate: new Date(),
-            endDate: new Date()
-          } : undefined;
-          
-          const sector: Sector | undefined = item.sectors ? {
-            id: item.sectors.id,
-            name: item.sectors.name,
-            price: item.sectors.price,
-            eventId: item.events.id,
-            capacity: 0,
-            available: 0,
-            color: item.sectors.color
-          } : undefined;
-          
-          const eventDate: EventDate | undefined = item.event_dates ? {
-            id: item.event_dates.id,
-            eventId: item.events.id,
-            date: new Date(item.event_dates.date),
-            artist: item.event_dates.artist,
-            startTime: item.event_dates.start_time
-          } : undefined;
-          
-          return {
-            id: item.id,
-            userId: user.id,
-            eventId: item.event_id,
-            batchId: item.batch_id,
-            sectorId: item.sector_id,
-            eventDateId: item.event_date_id,
-            purchaseDate: new Date(item.purchase_date),
-            qrCode: item.qr_code,
-            customCode: item.custom_code,
-            used: item.is_used,
-            event,
-            batch,
-            sector,
-            eventDate
-          };
-        });
-        
-        setTickets(formattedTickets);
-      } catch (error) {
-        console.error('Erro ao buscar ingressos:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchUserTickets();
-  }, [user]);
-  
-  if (!user) {
-    return (
-      <div className="container py-16 text-center">
-        <h1 className="text-2xl font-bold mb-6">Você precisa estar logado para ver seus ingressos</h1>
-        <Button asChild>
-          <Link to="/login">Entrar</Link>
-        </Button>
+  const [activeTab, setActiveTab] = useState('upcoming');
+
+  const upcomingTickets = mockTickets.filter(ticket => !ticket.used);
+  const usedTickets = mockTickets.filter(ticket => ticket.used);
+
+  const tickets = activeTab === 'upcoming' ? upcomingTickets : usedTickets;
+
+  return (
+    <div className="container mx-auto p-6">
+      <Helmet>
+        <title>Meus Ingressos - VaiNoShow</title>
+      </Helmet>
+
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold">Meus Ingressos</h1>
+        <p className="text-muted-foreground">Gerencie seus ingressos para eventos</p>
       </div>
-    );
-  }
 
-  const upcomingTickets = tickets.filter(
-    ticket => 
-      (ticket.eventDate 
-        ? new Date(ticket.eventDate.date) > new Date() 
-        : true) && 
-      !ticket.used
-  );
-  
-  const pastTickets = tickets.filter(
-    ticket => 
-      (ticket.eventDate 
-        ? new Date(ticket.eventDate.date) <= new Date() 
-        : false) || 
-      ticket.used
-  );
-  
-  const formatDate = (date: Date) => {
-    return format(date, "d 'de' MMMM 'de' Y", { locale: ptBR });
-  };
-  
-  const formatTime = (date: Date) => {
-    return format(date, "HH:mm", { locale: ptBR });
-  };
-  
-  const handleTicketClick = (ticketId: string) => {
-    if (selectedTicket === ticketId) {
-      setSelectedTicket(null);
-    } else {
-      setSelectedTicket(ticketId);
-    }
-  };
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="upcoming">Próximos</TabsTrigger>
+          <TabsTrigger value="used">Utilizados</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
-  if (loading) {
-    return (
-      <div className="container py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold">Meus Ingressos</h1>
-          <p className="text-muted-foreground">
-            Carregando seus ingressos...
-          </p>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3].map((i) => (
-            <Card key={i} className="overflow-hidden">
-              <div className="aspect-[16/9] w-full">
-                <Skeleton className="h-full w-full" />
-              </div>
-              <CardHeader>
-                <Skeleton className="h-6 w-3/4" />
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-2">
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-4 w-full" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {tickets.length > 0 ? (
+          tickets.map((ticket: TicketWithDetails) => (
+            <Card key={ticket.id} className="overflow-hidden">
+              <div className="relative h-48 bg-gradient-to-r from-primary/20 to-secondary/20">
+                <img 
+                  src={ticket.event.image} 
+                  alt={ticket.event.title} 
+                  className="w-full h-full object-cover"
+                />
+                {ticket.used && (
+                  <div className="absolute top-0 left-0 right-0 bottom-0 bg-black/50 flex items-center justify-center">
+                    <div className="bg-white p-2 rounded-full">
+                      <CheckCircle className="h-12 w-12 text-green-500" />
+                    </div>
                   </div>
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-full" />
+                )}
+              </div>
+              
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <h3 className="font-bold text-lg">{ticket.event.title}</h3>
+                    {ticket.eventDate ? (
+                      <p className="text-sm text-muted-foreground">
+                        {ticket.eventDate.artist} - {ticket.eventDate.date.toLocaleDateString('pt-BR')}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        {new Date(ticket.event.start_date).toLocaleDateString('pt-BR')}
+                      </p>
+                    )}
+                  </div>
+                  {ticket.sector && (
+                    <div 
+                      className="px-2 py-1 rounded text-xs font-semibold" 
+                      style={{backgroundColor: `${ticket.sector.color}20`, color: ticket.sector.color}}
+                    >
+                      {ticket.sector.name}
+                    </div>
+                  )}
+                </div>
+                
+                <div className="space-y-2 mb-4">
+                  <div className="flex items-center text-sm">
+                    <Calendar className="h-4 w-4 mr-2" />
+                    {ticket.eventDate 
+                      ? `${ticket.eventDate.date.toLocaleDateString('pt-BR')} às ${ticket.eventDate.startTime}`
+                      : new Date(ticket.event.start_date).toLocaleDateString('pt-BR')
+                    }
+                  </div>
+                  <div className="flex items-center text-sm">
+                    <MapPin className="h-4 w-4 mr-2" />
+                    {ticket.event.location}
+                  </div>
+                  {ticket.batch && (
+                    <div className="flex items-center text-sm">
+                      <Ticket className="h-4 w-4 mr-2" />
+                      {ticket.batch.name} - {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(ticket.batch.price)}
+                    </div>
+                  )}
+                </div>
+                
+                <div className="flex items-center justify-center mb-4">
+                  <QRCode value={ticket.qrCode} size={150} />
+                </div>
+                
+                <div className="text-xs text-center text-muted-foreground mb-4">
+                  {ticket.qrCode}
+                </div>
+                
+                <div className="flex justify-between gap-2">
+                  <Button className="flex-1" variant="outline">Transferir</Button>
+                  <Button className="flex-1">Ver Detalhes</Button>
                 </div>
               </CardContent>
             </Card>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="container py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">Meus Ingressos</h1>
-        <p className="text-muted-foreground">
-          Acesse seus ingressos adquiridos
-        </p>
-      </div>
-      
-      <Tabs defaultValue="upcoming" className="w-full">
-        <TabsList className="w-full max-w-md mb-6">
-          <TabsTrigger value="upcoming" className="flex-1">
-            Próximos Eventos
-          </TabsTrigger>
-          <TabsTrigger value="past" className="flex-1">
-            Eventos Passados
-          </TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="upcoming">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {upcomingTickets.length > 0 ? (
-              upcomingTickets.map(ticket => (
-                <div 
-                  key={ticket.id} 
-                  className={`${selectedTicket === ticket.id ? 'scale-100' : 'scale-95 hover:scale-100'} transition-all duration-300`}
-                >
-                  <Card 
-                    className="overflow-hidden h-full cursor-pointer relative"
-                    onClick={() => handleTicketClick(ticket.id)}
-                  >
-                    <div className="aspect-[16/9] w-full overflow-hidden">
-                      <img
-                        src={ticket.event?.image}
-                        alt={ticket.event?.title}
-                        className="h-full w-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = "https://placehold.co/600x400?text=Imagem+Indisponível";
-                        }}
-                      />
-                    </div>
-                    
-                    <CardHeader className="pb-2">
-                      <CardTitle>{ticket.event?.title}</CardTitle>
-                    </CardHeader>
-                    
-                    <CardContent>
-                      <div className="space-y-4">
-                        {ticket.eventDate && (
-                          <div className="grid grid-cols-2 gap-2 text-sm">
-                            <div>
-                              <div className="text-muted-foreground">Data</div>
-                              <div className="font-medium">{formatDate(ticket.eventDate.date)}</div>
-                            </div>
-                            <div>
-                              <div className="text-muted-foreground">Horário de início</div>
-                              <div className="font-medium">{ticket.eventDate.startTime}</div>
-                            </div>
-                          </div>
-                        )}
-                        
-                        {ticket.eventDate && (
-                          <div className="text-sm">
-                            <div className="text-muted-foreground">Artista/Atração</div>
-                            <div className="font-medium">{ticket.eventDate.artist}</div>
-                          </div>
-                        )}
-                        
-                        <div className="text-sm">
-                          <div className="text-muted-foreground">Local</div>
-                          <div className="font-medium">{ticket.event?.location}</div>
-                        </div>
-                        
-                        <div className="text-sm">
-                          <div className="text-muted-foreground">Ingresso</div>
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium">
-                              {ticket.batch?.name}
-                              {ticket.sector && ` - ${ticket.sector.name}`}
-                            </span>
-                            <Badge variant="outline">
-                              {ticket.used ? "Utilizado" : "Válido"}
-                            </Badge>
-                          </div>
-                        </div>
-                        
-                        {selectedTicket === ticket.id && (
-                          <div className="pt-4 flex flex-col items-center animate-fade-in">
-                            <div className="mb-2 font-medium text-sm">
-                              QR Code de Entrada
-                            </div>
-                            
-                            <QRCode 
-                              value={ticket.qrCode}
-                              size={180}
-                            />
-                            
-                            {ticket.customCode && (
-                              <div className="mt-2 text-sm text-center">
-                                <span className="text-muted-foreground">Código: </span>
-                                <span className="font-medium">{ticket.customCode}</span>
-                              </div>
-                            )}
-                            
-                            <div className="mt-4 w-full">
-                              <Button variant="outline" className="w-full" size="sm">
-                                <Share2 className="mr-2 h-4 w-4" />
-                                Compartilhar
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              ))
-            ) : (
-              <div className="col-span-full text-center py-12">
-                <p className="text-muted-foreground mb-6">
-                  Você não possui ingressos para eventos futuros.
-                </p>
-                <Button asChild>
-                  <Link to="/events">Ver Eventos Disponíveis</Link>
-                </Button>
-              </div>
-            )}
+          ))
+        ) : (
+          <div className="col-span-full flex flex-col items-center justify-center py-12 text-center">
+            <XCircle className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium">Nenhum ingresso encontrado</h3>
+            <p className="text-muted-foreground mb-6">
+              {activeTab === 'upcoming' 
+                ? 'Você não possui ingressos para eventos futuros.' 
+                : 'Você não possui ingressos utilizados.'}
+            </p>
+            <Button>Explorar Eventos</Button>
           </div>
-        </TabsContent>
-        
-        <TabsContent value="past">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {pastTickets.length > 0 ? (
-              pastTickets.map(ticket => (
-                <Card key={ticket.id} className="overflow-hidden h-full opacity-80">
-                  <div className="aspect-[16/9] w-full overflow-hidden">
-                    <img
-                      src={ticket.event?.image}
-                      alt={ticket.event?.title}
-                      className="h-full w-full object-cover grayscale"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = "https://placehold.co/600x400?text=Imagem+Indisponível";
-                      }}
-                    />
-                  </div>
-                  
-                  <CardHeader className="pb-2">
-                    <CardTitle>{ticket.event?.title}</CardTitle>
-                  </CardHeader>
-                  
-                  <CardContent>
-                    <div className="space-y-4">
-                      {ticket.eventDate && (
-                        <div className="grid grid-cols-2 gap-2 text-sm">
-                          <div>
-                            <div className="text-muted-foreground">Data</div>
-                            <div className="font-medium">{formatDate(ticket.eventDate.date)}</div>
-                          </div>
-                          <div>
-                            <div className="text-muted-foreground">Horário de início</div>
-                            <div className="font-medium">{ticket.eventDate.startTime}</div>
-                          </div>
-                        </div>
-                      )}
-                      
-                      {ticket.eventDate && (
-                        <div className="text-sm">
-                          <div className="text-muted-foreground">Artista/Atração</div>
-                          <div className="font-medium">{ticket.eventDate.artist}</div>
-                        </div>
-                      )}
-                      
-                      <div className="text-sm">
-                        <div className="text-muted-foreground">Local</div>
-                        <div className="font-medium">{ticket.event?.location}</div>
-                      </div>
-                      
-                      <div className="text-sm">
-                        <div className="text-muted-foreground">Ingresso</div>
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium">
-                            {ticket.batch?.name}
-                            {ticket.sector && ` - ${ticket.sector.name}`}
-                          </span>
-                          <Badge variant="secondary">
-                            Evento Finalizado
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
-            ) : (
-              <div className="col-span-full text-center py-12">
-                <p className="text-muted-foreground">
-                  Você não possui histórico de eventos passados.
-                </p>
-              </div>
-            )}
-          </div>
-        </TabsContent>
-      </Tabs>
+        )}
+      </div>
     </div>
   );
 };

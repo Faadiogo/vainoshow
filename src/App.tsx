@@ -1,3 +1,4 @@
+
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/AuthContext';
 import MainLayout from '@/layouts/MainLayout';
@@ -20,6 +21,7 @@ import { Toaster } from '@/components/ui/toaster';
 import TicketCreationPage from '@/pages/admin/TicketCreationPage';
 import TicketValidationPage from '@/pages/admin/TicketValidationPage';
 import TicketBatchesPage from '@/pages/admin/TicketBatchesPage';
+import SalesPage from '@/pages/admin/SalesPage';
 
 function App() {
   return (
@@ -48,6 +50,7 @@ function App() {
             <Route path="tickets/create" element={<TicketCreationPage />} />
             <Route path="tickets/validate" element={<TicketValidationPage />} />
             <Route path="ticket-batches" element={<TicketBatchesPage />} />
+            <Route path="sales" element={<SalesPage />} />
           </Route>
 
           {/* Not Found Route */}
